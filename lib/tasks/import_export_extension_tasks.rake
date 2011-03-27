@@ -79,9 +79,9 @@ namespace :db do
   desc "Import data"
   task :import_vhost => :environment do
     require 'highline/import'
-    say "ERROR: Specify a template to load with the TEMPLATE environment variable." and exit unless (ENV['TEMPLATE'] and File.exists?(ENV['TEMPLATE']))
+    #say "ERROR: Specify a template to load with the TEMPLATE environment variable." and exit unless (ENV['TEMPLATE'] and File.exists?(ENV['TEMPLATE']))
     # Load the data from the export file
-    data = YAML.load_file(ENV['TEMPLATE'] || "#{RAILS_ROOT}/db/export.yml")
+    #data = YAML.load_file(ENV['TEMPLATE'] || "#{RAILS_ROOT}/db/export.yml")
 
 
     I18n.locale = 'en'
@@ -109,7 +109,7 @@ namespace :db do
               if (attr.match("_id") && ENV['ID_OFFSET'] && !attr.match(/status|updated_by|created_by|twitter|base_gallery|filter/))
                 puts " - ajusting #{attr} + #{ENV['ID_OFFSET']} "
                 record[attr] = record[attr].to_i + ENV['ID_OFFSET'].to_i
-                if attr.match("parent_id") && record['parent_id'] == ENV['ID_OFFSET'] 
+                if attr.match("parent_id") && record['parent_id'] == ENV['ID_OFFSET']
                   puts "the ROOT page is at #{id}"
                   record[attr] = nil
                 end
@@ -130,13 +130,13 @@ namespace :db do
                   r.slug = record['slug']
                   r.breadcrumb = record["breadcrumb"]
                   r.description = record["description"]
-                  r.keywords = record["keywords" ]
+                  r.keywords = record["keywords"]
                   r.save!
                 when "PagePart", "Snippet", "Layout" then
                   puts "translation for #{model.to_s}"
                   I18n.locale = 'de'
                   r.content = record["content"]
-                  r.save!  
+                  r.save!
               end
 
             rescue StandardError => e
@@ -152,6 +152,39 @@ namespace :db do
         end
 
       end
+    end
+
+
+  end
+
+  desc "Import layouts from template path"
+  task :import_layouts => :environment do
+    require 'highline/import'
+    say "ERROR: Specify a PATH to load with the PATH environment variable." and exit unless (ENV['PATH'] and File.directory?(ENV['PATH']))
+    # Load the data from the export file
+    files = Dir.glob("#{ENV['PATH']}/**/**/*.{html}")
+    layout_prefix = (ENV['PREFIX']) ? "#{ENV['PREFIX']}-" : ""
+
+    I18n.locale = 'de'
+
+    puts
+    site = (Site.find(ENV['SITE_ID']) if ENV['SITE_ID']) || nil
+    files.each do |file|
+      layout_name = layout_prefix + File.basename(file, '.html')
+      begin
+        puts "Creating Layout #{layout_name} for #{file}"
+        layout = Layout.new
+        layout.site = site if ((layout.respond_to? :site) && site)
+        layout.name = layout_name
+        layout.content = File.read(file)
+        layout.save!
+        # UserActionObserver sets user to null, so we have to update explicitly
+        #Layout.update_all({:created_by_id => ((ENV['CREATED_BY_ID']) ? ENV['CREATED_BY_ID'] : User.first.id)}, {:id => r.id}) if r.respond_to? :created_by_id
+        #Layout.update_all({:updated_by_id => ((ENV['CREATED_BY_ID']) ? ENV['CREATED_BY_ID'] : record['created_by_id'])}, {:id => r.id}) if r.respond_to? :updated_by_id
+      rescue StandardError => e
+        puts "Could not create Layout #{layout_name} for #{file}: #{e}\n#{e.inspect}"
+      end
+
     end
 
 
